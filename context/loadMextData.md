@@ -4,13 +4,13 @@ This document provides context for AI coding agents (GitHub Copilot CLI, Claude 
 
 ## Overview
 
-The data comes from the **Children's Learning Support Site** (子供の学び応援サイト) published by the Japanese Ministry of Education (MEXT). It contains metadata for ~998 educational content items including titles, subjects, grade levels, URLs, licenses, and publishers.
+The data comes from the **Children's Learning Support Site** (子供の学び応援サイト) published by the Japanese Ministry of Education (MEXT). It contains metadata for ~890 educational content items including titles, subjects, grade levels, URLs, licenses, and publishers.
 
 ## Workflow
 
 ### 1. Download CSV
 
-The CSV is publicly available and small (~176 KB). The deployment script downloads it automatically:
+The CSV is publicly available and small (~179 KB). The deployment script downloads it automatically:
 
 ```bash
 curl -sL "$CSV_URL" -o "$DATA_DIR/$CSV_FILENAME"
@@ -18,7 +18,7 @@ curl -sL "$CSV_URL" -o "$DATA_DIR/$CSV_FILENAME"
 
 ### 2. Upload to OneLake
 
-Upload the CSV to the Lakehouse Files area using the OneLake blob endpoint:
+Upload the raw CSV to the Lakehouse Files area using the OneLake blob endpoint:
 
 ```bash
 curl -X PUT \
@@ -31,13 +31,14 @@ curl -X PUT \
 
 ### 3. Load into Delta Table
 
-The notebook reads the CSV (handling Shift-JIS encoding), cleans column names, and writes to a Delta table.
+The notebook uses **Python's csv module** (not `spark.read.csv`) to read the CSV, then creates a Spark DataFrame and writes to a Delta table.
 
 **Important notes:**
 - The CSV is encoded in **Shift-JIS** (cp932), not UTF-8
-- Spark can read Shift-JIS via `.option("encoding", "shift_jis")`
+- **Do NOT use `spark.read.csv()`** — it fails to write the resulting DataFrame to Delta tables in Fabric. Use Python's `csv.reader` with `encoding='shift_jis'` instead, then `spark.createDataFrame()`.
 - The CSV has 26 columns but only the first 15 contain data; the rest are empty padding
-- Column names use full-width characters (e.g., `＿` instead of `_`)
+- Some rows have embedded newlines in the `教材_名称` field — Python's csv.reader handles these correctly
+- There are ~140 empty rows at the end of the file — filter by checking the first column
 
 ### 4. Notebook Lakehouse Binding
 

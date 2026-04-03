@@ -13,7 +13,7 @@ LOCATION="westus3"
 SKU="F4"
 
 # Fabric Capacity
-CAPACITY_NAME="westus3f4skillsflearning"
+CAPACITY_NAME="westus3f4learning"
 
 # Fabric Workspace
 WORKSPACE_NAME="MextSkillsF4Learning"

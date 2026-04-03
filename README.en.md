@@ -1,6 +1,6 @@
 # Load MEXT Education Data — End-to-End Guide
 
-This guide documents the full process of provisioning Microsoft Fabric infrastructure and loading [Children's Learning Support Site Content Information](https://data.e-gov.go.jp/data/en/dataset/mext_20210222_0025) (子供の学び応援サイト掲載コンテンツ情報) data (~998 rows) into a Delta table using the Azure CLI and Fabric REST APIs.
+This guide documents the full process of provisioning Microsoft Fabric infrastructure and loading [Children's Learning Support Site Content Information](https://data.e-gov.go.jp/data/en/dataset/mext_20210222_0025) (子供の学び応援サイト掲載コンテンツ情報) data (~887 rows) into a Delta table using the Azure CLI and Fabric REST APIs.
 
 > This is a simplified learning version of [skills-for-fabric-load-medicare-data](https://github.com/DataSnowman/skills-for-fabric-load-medicare-data). Instead of 275M rows of Medicare data with zip files and multiple notebooks, this repo uses a single small CSV and one notebook — perfect for learning the Fabric deployment workflow.
 

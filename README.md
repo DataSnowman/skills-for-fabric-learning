@@ -1,6 +1,6 @@
 # MEXT 教育コンテンツデータの読み込み — エンドツーエンドガイド
 
-このガイドでは、Azure CLI と Fabric REST API を使用して Microsoft Fabric のインフラストラクチャをプロビジョニングし、[子供の学び応援サイト掲載コンテンツ情報](https://data.e-gov.go.jp/data/en/dataset/mext_20210222_0025)（約998行）を Delta テーブルに読み込む手順を説明します。
+このガイドでは、Azure CLI と Fabric REST API を使用して Microsoft Fabric のインフラストラクチャをプロビジョニングし、[子供の学び応援サイト掲載コンテンツ情報](https://data.e-gov.go.jp/data/en/dataset/mext_20210222_0025)（約887行）を Delta テーブルに読み込む手順を説明します。
 
 > これは [skills-for-fabric-load-medicare-data](https://github.com/DataSnowman/skills-for-fabric-load-medicare-data) の簡易学習版です。2億7500万行の Medicare データの代わりに、1つの小さな CSV と1つのノートブックを使用します。Fabric のデプロイワークフローを学ぶのに最適です。
 

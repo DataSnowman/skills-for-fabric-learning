@@ -126,7 +126,8 @@ if [[ -f "$CSV_PATH" ]]; then
 else
   info "Downloading from $CSV_URL ..."
   curl -sL "$CSV_URL" -o "$CSV_PATH" || fail "Could not download CSV"
-  ok "Downloaded: $CSV_PATH ($(wc -c < "$CSV_PATH" | tr -d ' ') bytes)"
+  ok "Downloaded CSV ($(wc -c < "$CSV_PATH" | tr -d ' ') bytes, Shift-JIS encoded)"
+  info "Note: The notebook handles Shift-JIS decoding and data cleaning at runtime"
 fi
 
 # ─── STEP 2: CREATE RESOURCE GROUP ──────────────────────────────────────────
