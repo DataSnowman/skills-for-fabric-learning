@@ -2,7 +2,7 @@
 
 This guide documents the full process of provisioning Microsoft Fabric infrastructure and loading [Children's Learning Support Site Content Information](https://data.e-gov.go.jp/data/en/dataset/mext_20210222_0025) (子供の学び応援サイト掲載コンテンツ情報) data (~887 rows) into a Delta table using the Azure CLI and Fabric REST APIs.
 
-> This is a simplified learning version of [skills-for-fabric-load-medicare-data](https://github.com/DataSnowman/skills-for-fabric-load-medicare-data). Instead of 275M rows of Medicare data with zip files and multiple notebooks, this repo uses a single small CSV and one notebook — perfect for learning the Fabric deployment workflow.
+> This is a simplified learning version of [skills-for-fabric-load-medicare-data](https://github.com/DataSnowman/skills-for-fabric-load-medicare-data). Instead of 275M rows of Medicare data with zip files and multiple notebooks, this repo uses a single small CSV and two notebooks — perfect for learning the Fabric deployment workflow and AI functions.
 
 > This project was built using [GitHub Copilot CLI](https://docs.github.com/en/copilot) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with skills and context from [microsoft/skills-for-fabric](https://github.com/microsoft/skills-for-fabric).
 
@@ -100,44 +100,55 @@ Deploy the notebook in notebooks/LoadMextEducationData.ipynb.
 
 | Step | Description |
 |---|---|
-| 0 | Preflight checks (Azure login, notebook exists) |
+| 0 | Preflight checks (Azure login, notebooks exist) |
 | 1 | Download CSV from MEXT website |
 | 2 | Create Azure Resource Group |
 | 3 | Create Fabric Capacity (F4) |
 | 4 | Create Fabric Workspace |
 | 5 | Create Lakehouse |
 | 6 | Upload CSV to OneLake |
-| 7 | Deploy notebook with lakehouse binding |
-| 8 | Run notebook (loads CSV → Delta table) |
-| 9 | Verify Delta table exists |
+| 7 | Deploy notebooks with lakehouse binding |
+| 8 | Run load notebook (CSV → `mext.教育コンテンツ` Delta table) |
+| 9 | Run translation notebook (AI translate → `mext.education_content`) |
+| 10 | Verify Delta tables exist |
 
 ## Repo Structure
 
 ```
 skills-for-fabric-learning/
-├── README.md                          ← Japanese README (shown on GitHub homepage)
-├── README.en.md                       ← English README
+├── README.md                              ← Japanese README (shown on GitHub homepage)
+├── README.en.md                           ← English README
 ├── config/
-│   └── variables.md                   ← Deployment configuration
+│   └── variables.md                       ← Deployment configuration
 ├── context/
-│   └── loadMextData.md                ← AI agent context file
+│   └── loadMextData.md                    ← AI agent context file
 ├── data/
-│   └── putfileshere.txt               ← (CSV downloaded automatically)
+│   └── putfileshere.txt                   ← (CSV downloaded automatically)
 ├── notebooks/
-│   └── LoadMextEducationData.ipynb    ← Spark notebook
-├── deploy-mext-e2e.sh                 ← End-to-end deployment script
+│   ├── LoadMextEducationData.ipynb        ← Load CSV → Japanese Delta table
+│   └── TranslateMextToEnglish.ipynb       ← AI translate → English Delta table
+├── deploy-mext-e2e.sh                     ← End-to-end deployment script
 ├── pyproject.toml
 └── .gitignore
 ```
 
 ## Verifying the Results
 
-After deployment, query the Delta table in Fabric SQL:
+After deployment, query both Delta tables in Fabric SQL:
 
+**Japanese table:**
 ```sql
-SELECT 教材_教科等 AS subject, COUNT(*) AS count
+SELECT `教材_教科等` AS subject, COUNT(*) AS count
+FROM [MextLearningLH].[mext].[教育コンテンツ]
+GROUP BY `教材_教科等`
+ORDER BY count DESC
+```
+
+**English table (AI translated):**
+```sql
+SELECT material_subject AS subject, COUNT(*) AS count
 FROM [MextLearningLH].[mext].[education_content]
-GROUP BY 教材_教科等
+GROUP BY material_subject
 ORDER BY count DESC
 ```
 
@@ -149,6 +160,7 @@ ORDER BY count DESC
 | Capacity creation fails | Ensure your subscription has Fabric capacity permissions |
 | CSV download fails | Check internet connectivity; try downloading manually to `data/` |
 | Notebook job fails | Check Fabric capacity is F4 or higher (F2 lacks Spark resources) |
+| Translation notebook fails | Ensure AI functions (Copilot) are enabled on the Fabric capacity. Requires Runtime 1.3+ |
 | Delta table not found | Wait a few minutes and re-run the verify step |
 | Shift-JIS encoding errors | The notebook handles encoding automatically; ensure the CSV is unmodified |
 

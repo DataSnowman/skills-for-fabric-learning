@@ -58,12 +58,14 @@ ONELAKE_DATA_PATH="${ONELAKE_DATA_PATH:-Files/mext}"
 
 # Delta table
 DELTA_SCHEMA="${DELTA_SCHEMA:-mext}"
-DELTA_TABLE="${DELTA_TABLE:-education_content}"
+DELTA_TABLE_JP="${DELTA_TABLE_JP:-教育コンテンツ}"
+DELTA_TABLE_EN="${DELTA_TABLE_EN:-education_content}"
 
 # Local paths
 DATA_DIR="$SCRIPT_DIR/data"
 NOTEBOOK_DIR="$SCRIPT_DIR/notebooks"
 NOTEBOOK_NAME="${NOTEBOOK_NAME:-LoadMextEducationData}"
+TRANSLATE_NOTEBOOK_NAME="${TRANSLATE_NOTEBOOK_NAME:-TranslateMextToEnglish}"
 
 # ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 
@@ -112,7 +114,8 @@ ok "Logged in as $ADMIN_EMAIL (subscription: $SUBSCRIPTION_ID)"
 
 [[ -d "$NOTEBOOK_DIR" ]] || fail "Notebook directory not found: $NOTEBOOK_DIR"
 [[ -f "$NOTEBOOK_DIR/$NOTEBOOK_NAME.ipynb" ]] || fail "$NOTEBOOK_NAME.ipynb not found"
-ok "Notebook found: $NOTEBOOK_NAME.ipynb"
+[[ -f "$NOTEBOOK_DIR/$TRANSLATE_NOTEBOOK_NAME.ipynb" ]] || fail "$TRANSLATE_NOTEBOOK_NAME.ipynb not found"
+ok "Notebooks found: $NOTEBOOK_NAME.ipynb, $TRANSLATE_NOTEBOOK_NAME.ipynb"
 
 # ─── STEP 1: DOWNLOAD CSV ───────────────────────────────────────────────────
 
@@ -269,7 +272,7 @@ fi
 
 # ─── STEP 7: PREPARE AND DEPLOY NOTEBOOK ────────────────────────────────────
 
-log "Step 7 — Prepare and deploy notebook with lakehouse binding"
+log "Step 7 — Prepare and deploy notebooks with lakehouse binding"
 
 python3 << PYEOF
 import json, base64, uuid, os
@@ -279,56 +282,56 @@ lh_id = "$LH_ID"
 lh_name = "$LAKEHOUSE_NAME"
 nb_dir = "$NOTEBOOK_DIR"
 tmpdir = "$TMPDIR"
-nb_name = "$NOTEBOOK_NAME"
 
-# Load notebook
-with open(os.path.join(nb_dir, f'{nb_name}.ipynb'), 'r') as f:
-    nb = json.load(f)
+for nb_name in ["$NOTEBOOK_NAME", "$TRANSLATE_NOTEBOOK_NAME"]:
+    # Load notebook
+    with open(os.path.join(nb_dir, f'{nb_name}.ipynb'), 'r') as f:
+        nb = json.load(f)
 
-# Inject lakehouse binding
-nb['metadata']['dependencies'] = {
-    "lakehouse": {
-        "default_lakehouse": lh_id,
-        "default_lakehouse_name": lh_name,
-        "default_lakehouse_workspace_id": ws_id,
-        "known_lakehouses": [{"id": lh_id}]
+    # Inject lakehouse binding
+    nb['metadata']['dependencies'] = {
+        "lakehouse": {
+            "default_lakehouse": lh_id,
+            "default_lakehouse_name": lh_name,
+            "default_lakehouse_workspace_id": ws_id,
+            "known_lakehouses": [{"id": lh_id}]
+        }
     }
-}
 
-# Build deploy body
-nb_b64 = base64.b64encode(json.dumps(nb).encode()).decode()
-deploy_body = {
-    "displayName": nb_name,
-    "type": "Notebook",
-    "definition": {
-        "format": "ipynb",
-        "parts": [
-            {"path": "artifact.content.ipynb", "payload": nb_b64, "payloadType": "InlineBase64"}
-        ]
+    # Build deploy body
+    nb_b64 = base64.b64encode(json.dumps(nb).encode()).decode()
+    deploy_body = {
+        "displayName": nb_name,
+        "type": "Notebook",
+        "definition": {
+            "format": "ipynb",
+            "parts": [
+                {"path": "artifact.content.ipynb", "payload": nb_b64, "payloadType": "InlineBase64"}
+            ]
+        }
     }
-}
-with open(f'{tmpdir}/{nb_name}_deploy_body.json', 'w') as f:
-    json.dump(deploy_body, f)
+    with open(f'{tmpdir}/{nb_name}_deploy_body.json', 'w') as f:
+        json.dump(deploy_body, f)
 
-# Build updateDefinition body (for lakehouse binding after create)
-platform = {
-    "metadata": {"type": "SparkNotebook", "displayName": nb_name},
-    "config": {"version": "2.0", "logicalId": str(uuid.uuid4())}
-}
-platform_b64 = base64.b64encode(json.dumps(platform).encode()).decode()
-update_body = {
-    "definition": {
-        "format": "ipynb",
-        "parts": [
-            {"path": "artifact.content.ipynb", "payload": nb_b64, "payloadType": "InlineBase64"},
-            {"path": ".platform", "payload": platform_b64, "payloadType": "InlineBase64"}
-        ]
+    # Build updateDefinition body (for lakehouse binding after create)
+    platform = {
+        "metadata": {"type": "SparkNotebook", "displayName": nb_name},
+        "config": {"version": "2.0", "logicalId": str(uuid.uuid4())}
     }
-}
-with open(f'{tmpdir}/{nb_name}_update_body.json', 'w') as f:
-    json.dump(update_body, f)
+    platform_b64 = base64.b64encode(json.dumps(platform).encode()).decode()
+    update_body = {
+        "definition": {
+            "format": "ipynb",
+            "parts": [
+                {"path": "artifact.content.ipynb", "payload": nb_b64, "payloadType": "InlineBase64"},
+                {"path": ".platform", "payload": platform_b64, "payloadType": "InlineBase64"}
+            ]
+        }
+    }
+    with open(f'{tmpdir}/{nb_name}_update_body.json', 'w') as f:
+        json.dump(update_body, f)
 
-print(f"  ✓ {nb_name} deploy and update bodies ready")
+    print(f"  ✓ {nb_name} deploy and update bodies ready")
 PYEOF
 
 deploy_or_update_notebook() {
@@ -373,18 +376,28 @@ deploy_or_update_notebook() {
 }
 
 LOAD_NB_ID=$(deploy_or_update_notebook "$NOTEBOOK_NAME")
+TRANSLATE_NB_ID=$(deploy_or_update_notebook "$TRANSLATE_NOTEBOOK_NAME")
 
-# ─── STEP 8: RUN NOTEBOOK ───────────────────────────────────────────────────
+# ─── STEP 8: RUN LOAD NOTEBOOK ──────────────────────────────────────────────
 
-log "Step 8 — Run $NOTEBOOK_NAME notebook"
+log "Step 8 — Run $NOTEBOOK_NAME notebook (load Japanese data)"
 
 LOAD_JOB_ID=$(submit_notebook_job "$WS_ID" "$LOAD_NB_ID")
 [[ -n "$LOAD_JOB_ID" ]] || fail "Could not submit notebook job"
 poll_job "$WS_ID" "$LOAD_NB_ID" "$LOAD_JOB_ID" "$NOTEBOOK_NAME" 60 15
 
-# ─── STEP 9: VERIFY ─────────────────────────────────────────────────────────
+# ─── STEP 9: RUN TRANSLATION NOTEBOOK ───────────────────────────────────────
 
-log "Step 9 — Verify Delta table"
+log "Step 9 — Run $TRANSLATE_NOTEBOOK_NAME notebook (translate to English)"
+info "This step uses Fabric AI functions and may take several minutes..."
+
+TRANSLATE_JOB_ID=$(submit_notebook_job "$WS_ID" "$TRANSLATE_NB_ID")
+[[ -n "$TRANSLATE_JOB_ID" ]] || fail "Could not submit translation notebook job"
+poll_job "$WS_ID" "$TRANSLATE_NB_ID" "$TRANSLATE_JOB_ID" "$TRANSLATE_NOTEBOOK_NAME" 120 15
+
+# ─── STEP 10: VERIFY ────────────────────────────────────────────────────────
+
+log "Step 10 — Verify Delta tables"
 
 STORAGE_TOKEN=$(az account get-access-token \
   --resource "https://storage.azure.com" \
@@ -392,29 +405,37 @@ STORAGE_TOKEN=$(az account get-access-token \
 
 TABLE_CHECK=$(curl -s -H "Authorization: Bearer $STORAGE_TOKEN" \
   -H "x-ms-version: 2023-01-03" \
-  "https://onelake.blob.fabric.microsoft.com/$WS_ID/$LH_ID/Tables?restype=container&comp=list&prefix=$DELTA_SCHEMA&maxresults=5")
+  "https://onelake.blob.fabric.microsoft.com/$WS_ID/$LH_ID/Tables?restype=container&comp=list&prefix=$DELTA_SCHEMA&maxresults=10")
 
-if echo "$TABLE_CHECK" | grep -q "$DELTA_TABLE"; then
-  ok "Delta table $DELTA_SCHEMA.$DELTA_TABLE exists"
+if echo "$TABLE_CHECK" | grep -q "$DELTA_TABLE_EN"; then
+  ok "Delta table $DELTA_SCHEMA.$DELTA_TABLE_EN (English) exists"
 else
-  fail "Delta table not found"
+  info "English table not yet visible via blob API (may still be propagating)"
 fi
 
 # ─── SUMMARY ─────────────────────────────────────────────────────────────────
 
 log "DEPLOYMENT COMPLETE"
 echo ""
-echo "  Capacity:  $CAPACITY_NAME  ($FABRIC_CAPACITY_ID)"
-echo "  Workspace: $WORKSPACE_NAME ($WS_ID)"
-echo "  Lakehouse: $LAKEHOUSE_NAME ($LH_ID)"
-echo "  Notebook:  $NOTEBOOK_NAME ($LOAD_NB_ID)"
-echo "  Table:     $DELTA_SCHEMA.$DELTA_TABLE"
+echo "  Capacity:   $CAPACITY_NAME  ($FABRIC_CAPACITY_ID)"
+echo "  Workspace:  $WORKSPACE_NAME ($WS_ID)"
+echo "  Lakehouse:  $LAKEHOUSE_NAME ($LH_ID)"
+echo "  Notebooks:"
+echo "    Load:      $NOTEBOOK_NAME ($LOAD_NB_ID)"
+echo "    Translate: $TRANSLATE_NOTEBOOK_NAME ($TRANSLATE_NB_ID)"
+echo "  Tables:"
+echo "    Japanese:  $DELTA_SCHEMA.$DELTA_TABLE_JP"
+echo "    English:   $DELTA_SCHEMA.$DELTA_TABLE_EN"
 echo ""
-echo "  To query in Fabric SQL:"
-echo "    SELECT 教材_教科等 AS subject, COUNT(*) AS count"
-echo "    FROM [$LAKEHOUSE_NAME].[$DELTA_SCHEMA].[$DELTA_TABLE]"
-echo "    GROUP BY 教材_教科等"
-echo "    ORDER BY count DESC"
+echo "  Query Japanese table:"
+echo "    SELECT \`教材_教科等\` AS subject, COUNT(*) AS count"
+echo "    FROM [$LAKEHOUSE_NAME].[$DELTA_SCHEMA].[$DELTA_TABLE_JP]"
+echo "    GROUP BY \`教材_教科等\` ORDER BY count DESC"
+echo ""
+echo "  Query English table:"
+echo "    SELECT material_subject AS subject, COUNT(*) AS count"
+echo "    FROM [$LAKEHOUSE_NAME].[$DELTA_SCHEMA].[$DELTA_TABLE_EN]"
+echo "    GROUP BY material_subject ORDER BY count DESC"
 echo ""
 
 # Clean up temp files

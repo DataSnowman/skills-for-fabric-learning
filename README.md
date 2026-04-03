@@ -2,7 +2,7 @@
 
 このガイドでは、Azure CLI と Fabric REST API を使用して Microsoft Fabric のインフラストラクチャをプロビジョニングし、[子供の学び応援サイト掲載コンテンツ情報](https://data.e-gov.go.jp/data/en/dataset/mext_20210222_0025)（約887行）を Delta テーブルに読み込む手順を説明します。
 
-> これは [skills-for-fabric-load-medicare-data](https://github.com/DataSnowman/skills-for-fabric-load-medicare-data) の簡易学習版です。2億7500万行の Medicare データの代わりに、1つの小さな CSV と1つのノートブックを使用します。Fabric のデプロイワークフローを学ぶのに最適です。
+> これは [skills-for-fabric-load-medicare-data](https://github.com/DataSnowman/skills-for-fabric-load-medicare-data) の簡易学習版です。2億7500万行の Medicare データの代わりに、1つの小さな CSV と2つのノートブックを使用します。Fabric のデプロイワークフローと AI 関数を学ぶのに最適です。
 
 > このプロジェクトは [GitHub Copilot CLI](https://docs.github.com/en/copilot) と [Claude Code](https://docs.anthropic.com/en/docs/claude-code) を使用し、[microsoft/skills-for-fabric](https://github.com/microsoft/skills-for-fabric) のスキルとコンテキストを活用して構築されました。
 
@@ -128,36 +128,47 @@ notebooks/LoadMextEducationData.ipynb のノートブックをデプロイして
 | 5 | レイクハウスの作成 |
 | 6 | CSV を OneLake にアップロード |
 | 7 | レイクハウスバインディング付きでノートブックをデプロイ |
-| 8 | ノートブックの実行（CSV → Delta テーブル） |
-| 9 | Delta テーブルの存在確認 |
+| 8 | データ読み込みノートブックの実行（CSV → `mext.教育コンテンツ` Delta テーブル） |
+| 9 | 翻訳ノートブックの実行（AI翻訳 → `mext.education_content`） |
+| 10 | Delta テーブルの存在確認 |
 
 ## リポジトリ構成
 
 ```
 skills-for-fabric-learning/
-├── README.md                          ← 日本語版 README（このファイル）
-├── README.en.md                       ← 英語版 README
+├── README.md                              ← 日本語版 README（このファイル）
+├── README.en.md                           ← 英語版 README
 ├── config/
-│   └── variables.md                   ← デプロイ設定
+│   └── variables.md                       ← デプロイ設定
 ├── context/
-│   └── loadMextData.md                ← AI エージェント用コンテキストファイル
+│   └── loadMextData.md                    ← AI エージェント用コンテキストファイル
 ├── data/
-│   └── putfileshere.txt               ← （CSV は自動ダウンロード）
+│   └── putfileshere.txt                   ← （CSV は自動ダウンロード）
 ├── notebooks/
-│   └── LoadMextEducationData.ipynb    ← Spark ノートブック
-├── deploy-mext-e2e.sh                 ← エンドツーエンドデプロイスクリプト
+│   ├── LoadMextEducationData.ipynb        ← CSV → 日本語 Delta テーブル
+│   └── TranslateMextToEnglish.ipynb       ← AI翻訳 → 英語 Delta テーブル
+├── deploy-mext-e2e.sh                     ← エンドツーエンドデプロイスクリプト
 ├── pyproject.toml
 └── .gitignore
 ```
 
 ## 結果の確認
 
-デプロイ後、Fabric SQL で Delta テーブルをクエリできます：
+デプロイ後、Fabric SQL で両方の Delta テーブルをクエリできます：
 
+**日本語テーブル：**
 ```sql
-SELECT 教材_教科等 AS subject, COUNT(*) AS count
+SELECT `教材_教科等` AS subject, COUNT(*) AS count
+FROM [MextLearningLH].[mext].[教育コンテンツ]
+GROUP BY `教材_教科等`
+ORDER BY count DESC
+```
+
+**英語テーブル（AI翻訳済み）：**
+```sql
+SELECT material_subject AS subject, COUNT(*) AS count
 FROM [MextLearningLH].[mext].[education_content]
-GROUP BY 教材_教科等
+GROUP BY material_subject
 ORDER BY count DESC
 ```
 
@@ -169,6 +180,7 @@ ORDER BY count DESC
 | キャパシティ作成が失敗する | サブスクリプションに Fabric キャパシティの作成権限があることを確認してください |
 | CSV ダウンロードが失敗する | インターネット接続を確認するか、手動で `data/` にダウンロードしてください |
 | ノートブックジョブが失敗する | Fabric キャパシティが F4 以上であることを確認してください（F2 では Spark リソースが不足します） |
+| 翻訳ノートブックが失敗する | Fabric キャパシティで AI 関数（Copilot）が有効になっていることを確認してください。ランタイム 1.3 以上が必要です |
 | Delta テーブルが見つからない | 数分待ってから確認ステップを再実行してください |
 | Shift-JIS エンコーディングエラー | ノートブックが自動的にエンコーディングを処理します。CSV が変更されていないことを確認してください |
 
