@@ -1,0 +1,21 @@
+# Data files (don't commit large CSVs)
+*.csv
+*.zip
+*.parquet
+
+# Temp files from deployment
+/tmp/
+/.tmp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python venv
+.venv/
+__pycache__/
+
+# Azure/Fabric tokens
+*.token
+.env

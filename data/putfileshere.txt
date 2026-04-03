@@ -1,0 +1,7 @@
+The CSV file will be downloaded automatically by the deployment script.
+
+Source: https://data.e-gov.go.jp/data/en/dataset/mext_20210222_0025
+Direct download: https://www.mext.go.jp/content/20201221-mxt_syogai03-000010378_2.csv
+
+If you prefer to download manually, place the CSV file in this directory and name it:
+  mext_education_content.csv
