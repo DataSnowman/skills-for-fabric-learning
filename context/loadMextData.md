@@ -1,6 +1,6 @@
 # Load MEXT Education Data into Fabric
 
-This document provides context for AI coding agents (GitHub Copilot CLI, Claude Code) on how to load MEXT education content data into a Microsoft Fabric Lakehouse Delta table.
+This document provides context for AI coding agents (GitHub Copilot CLI, Claude Code) on how to load MEXT education content data into a Microsoft Fabric Lakehouse Delta table and translate it to English.
 
 ## Overview
 
@@ -29,9 +29,9 @@ curl -X PUT \
   "https://onelake.blob.fabric.microsoft.com/$WS_ID/$LH_ID/Files/mext/$CSV_FILENAME"
 ```
 
-### 3. Load into Delta Table
+### 3. Load into Japanese Delta Table
 
-The notebook uses **Python's csv module** (not `spark.read.csv`) to read the CSV, then creates a Spark DataFrame and writes to a Delta table.
+The notebook uses **Python's csv module** (not `spark.read.csv`) to read the CSV, then creates a Spark DataFrame and writes to `mext.education_content_jp`.
 
 **Important notes:**
 - The CSV is encoded in **Shift-JIS** (cp932), not UTF-8
@@ -39,8 +39,26 @@ The notebook uses **Python's csv module** (not `spark.read.csv`) to read the CSV
 - The CSV has 26 columns but only the first 15 contain data; the rest are empty padding
 - Some rows have embedded newlines in the `教材_名称` field — Python's csv.reader handles these correctly
 - There are ~140 empty rows at the end of the file — filter by checking the first column
+- **Use English table name** (`education_content_jp`) — Japanese table names cause "Unidentified" entries in the SQL endpoint
+- **Keep Japanese column headers** (教材_ID, 教材_名称, etc.) as requested
 
-### 4. Notebook Lakehouse Binding
+### 4. Translate to English Delta Table
+
+The translate notebook creates `mext.education_content_en` using Fabric AI functions:
+
+1. Read `mext.education_content_jp`
+2. Rename Japanese columns to ASCII (required — ai.translate fails with Japanese input_col)
+3. Translate 10 columns independently using `df.ai.translate()` (NOT chained — chaining drops previous columns)
+4. Collect each translated column to pandas via `.select(output_col).toPandas()`
+5. Join in pandas, rename remaining columns, convert back to Spark
+6. Write to `mext.education_content_en`
+
+**Critical constraints:**
+- `ai.translate()` chaining is broken — each call drops prior translated columns
+- Japanese column names in `input_col` cause failures — rename to ASCII first
+- No `%pip install openai` needed — just `import synapse.ml.spark.aifunc as aifunc`
+
+### 5. Notebook Lakehouse Binding
 
 The notebook must be bound to the lakehouse via notebook metadata dependencies, not via a PATCH body. Use the `updateDefinition` endpoint:
 
@@ -62,14 +80,23 @@ The notebook metadata must include:
 }
 ```
 
-### 5. Verify
+### 6. Verify
 
-After the notebook runs, verify the Delta table exists:
+After both notebooks run, verify the Delta tables:
 
+**Japanese table:**
 ```sql
-SELECT 教材_教科等 AS subject, COUNT(*) AS count
-FROM [LakehouseName].[mext].[education_content]
-GROUP BY 教材_教科等
+SELECT `教材_教科等` AS subject, COUNT(*) AS count
+FROM [MextLearningLH].[mext].[education_content_jp]
+GROUP BY `教材_教科等`
+ORDER BY count DESC
+```
+
+**English table:**
+```sql
+SELECT material_subject AS subject, COUNT(*) AS count
+FROM [MextLearningLH].[mext].[education_content_en]
+GROUP BY material_subject
 ORDER BY count DESC
 ```
 

@@ -108,8 +108,8 @@ Deploy the notebook in notebooks/LoadMextEducationData.ipynb.
 | 5 | Create Lakehouse |
 | 6 | Upload CSV to OneLake |
 | 7 | Deploy notebooks with lakehouse binding |
-| 8 | Run load notebook (CSV → `mext.教育コンテンツ` Delta table) |
-| 9 | Run translation notebook (AI translate → `mext.education_content`) |
+| 8 | Run load notebook (CSV → `mext.education_content_jp` Delta table) |
+| 9 | Run translation notebook (AI translate → `mext.education_content_en`) |
 | 10 | Verify Delta tables exist |
 
 ## Repo Structure
@@ -163,7 +163,7 @@ After deployment, query both Delta tables in Fabric SQL:
 **Japanese table:**
 ```sql
 SELECT `教材_教科等` AS subject, COUNT(*) AS count
-FROM [MextLearningLH].[mext].[教育コンテンツ]
+FROM [MextLearningLH].[mext].[education_content_jp]
 GROUP BY `教材_教科等`
 ORDER BY count DESC
 ```
@@ -171,7 +171,7 @@ ORDER BY count DESC
 **English table (AI translated):**
 ```sql
 SELECT material_subject AS subject, COUNT(*) AS count
-FROM [MextLearningLH].[mext].[education_content]
+FROM [MextLearningLH].[mext].[education_content_en]
 GROUP BY material_subject
 ORDER BY count DESC
 ```

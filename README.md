@@ -128,8 +128,8 @@ notebooks/LoadMextEducationData.ipynb のノートブックをデプロイして
 | 5 | レイクハウスの作成 |
 | 6 | CSV を OneLake にアップロード |
 | 7 | レイクハウスバインディング付きでノートブックをデプロイ |
-| 8 | データ読み込みノートブックの実行（CSV → `mext.教育コンテンツ` Delta テーブル） |
-| 9 | 翻訳ノートブックの実行（AI翻訳 → `mext.education_content`） |
+| 8 | データ読み込みノートブックの実行（CSV → `mext.education_content_jp` Delta テーブル） |
+| 9 | 翻訳ノートブックの実行（AI翻訳 → `mext.education_content_en`） |
 | 10 | Delta テーブルの存在確認 |
 
 ## リポジトリ構成
@@ -183,7 +183,7 @@ Fabric SQL 分析エンドポイント
 **日本語テーブル：**
 ```sql
 SELECT `教材_教科等` AS subject, COUNT(*) AS count
-FROM [MextLearningLH].[mext].[教育コンテンツ]
+FROM [MextLearningLH].[mext].[education_content_jp]
 GROUP BY `教材_教科等`
 ORDER BY count DESC
 ```
@@ -191,7 +191,7 @@ ORDER BY count DESC
 **英語テーブル（AI翻訳済み）：**
 ```sql
 SELECT material_subject AS subject, COUNT(*) AS count
-FROM [MextLearningLH].[mext].[education_content]
+FROM [MextLearningLH].[mext].[education_content_en]
 GROUP BY material_subject
 ORDER BY count DESC
 ```

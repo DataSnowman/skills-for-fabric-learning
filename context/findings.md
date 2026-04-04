@@ -1,111 +1,99 @@
+
+
 # Translation Notebook Findings
 
 ## Summary
 
-We are building a simplified Fabric learning repo that loads a Japanese education CSV
-(MEXT data, ~890 rows, 15 columns) into a Delta table (`mext.教育コンテンツ`) and then
-uses Fabric AI functions (`df.ai.translate`) to create an English version (`mext.education_content`).
+This repo loads a Japanese education CSV (MEXT data, ~890 rows, 15 columns) into a
+Delta table (`mext.education_content_jp` with Japanese column headers) and then uses
+Fabric AI functions (`df.ai.translate`) to create an English version (`mext.education_content_en`).
 
-The **Load notebook works** and has been tested end-to-end via the deploy script.
-The **Translate notebook does NOT yet work** when submitted as a REST API batch job.
+Both notebooks work end-to-end via the deploy script (`deploy-mext-e2e.sh`), including
+the translation notebook running as a REST API batch job (~4.5 minutes for 10 columns).
 
 ---
 
-## The Core Problem: REST API vs Interactive Execution
+## Working Pattern: Independent Translates + Pandas Collection
 
-The user has a **working notebook** (`TranslateToJapanese.ipynb`) in another project
-that successfully chains **12 `ai.translate()` calls** followed by column renames,
-`display()`, and `write.saveAsTable()`. That notebook was run **interactively in the
-Fabric UI**.
+The key discovery is that **ai.translate() chaining is broken** — each chained call
+drops all previously translated columns, keeping only the last one. The working pattern
+translates each column **independently** from the source DataFrame, collects each result
+to pandas, then joins them in memory.
 
-All of our translation attempts submitted via the **Fabric REST API** (`RunNotebook`
-job type) fail with "Job instance failed without detail error" in ~30–60 seconds.
-
-### What the Working Notebook Does (TranslateToJapanese.ipynb)
+### TranslateMextToEnglish.ipynb Structure
 
 ```
-Cell 0: (empty welcome cell)
-Cell 1: df = spark.sql("SELECT * FROM ..."); display(df)
-Cell 2: %pip install -q --force-reinstall openai==1.99.5 2>/dev/null
-Cell 3: import synapse.ml.spark.aifunc as aifunc
-Cell 4: single translate + display (test)
-Cell 5: 3 chained translates + display (test)
-Cell 6: 12 chained translates + display
-Cell 7: rename numeric columns with .withColumn()
-Cell 8: write to staging table
-Cell 9: check staging table
-Cell 10: SQL SELECT clean columns from staging
-Cell 11: write final table (English name)
-Cell 12: write final table (Japanese name)
+Cell 0: Import — import synapse.ml.spark.aifunc as aifunc
+Cell 1: Read source table — spark.table('mext.education_content_jp') + display
+Cell 2: Rename Japanese columns to ASCII (required for ai.translate input_col)
+Cell 3: Loop — translate 10 columns independently, collect each to pandas,
+         join in pandas DataFrame, convert back to Spark, write to mext.education_content_en
+Cell 4: Verify — read back and display the English table
 ```
 
-Key pattern: **translate → display → rename → write to staging → SQL select clean cols → write final**
+### Why This Works (and chaining doesn't)
 
-### What Fails via REST API
+```python
+# BROKEN — each call drops previous output columns:
+result = df.ai.translate(to_lang='en', input_col='col_a', output_col='a_en')
+result = result.ai.translate(to_lang='en', input_col='col_b', output_col='b_en')
+# result only has b_en, NOT a_en
 
-Every translate notebook submitted via REST API fails, including:
-- 9 chained translates with `display()` + staging + SQL select + write
-- Single translate + `.collect()` (even on 5 rows)
-- Single translate + `.drop()` + write
-- Single translate + `.select()` + write
-- Multi-cell: translate+write in cell 1, read-back+select in cell 2
+# WORKING — independent translates collected to pandas:
+for col_name, out_name in translate_cols:
+    translated = df.ai.translate(to_lang='en', input_col=col_name, output_col=out_name)
+    en_series = translated.select(out_name).toPandas()[out_name]
+    pdf[out_name] = en_series
+```
 
-### What Works via REST API
-
-- **≤5 chained `ai.translate()` → direct `.write.saveAsTable()`** (no select/drop/collect between)
-- This has been tested and confirmed multiple times
-
-### Hypothesis
-
-The `RunNotebook` REST API job type may compile all cells into a single Spark plan,
-which fails when the plan is too complex (many AI translate + reshaping operations).
-Interactive execution runs cells independently with separate Spark plans per cell.
+With only ~890 rows, the pandas collection is fast and memory-efficient.
 
 ---
 
 ## Key Discoveries
 
-### 1. pip install openai IS used in the working notebook
+### 1. ai.translate() chaining is BROKEN (April 2026)
 
-The working `TranslateToJapanese.ipynb` includes `%pip install -q --force-reinstall openai==1.99.5`.
-The official docs say PySpark AI functions don't need it, but the working notebook has it.
-Include it to match the proven pattern.
+Each `ai.translate()` call on a previously translated DataFrame drops all prior
+translated output columns. Only the LAST output_col survives. This was the documented
+pattern but no longer works. Confirmed both interactively and via REST API.
 
 ### 2. AI functions fail with Japanese column names
 
 `df.ai.translate()` fails when the `input_col` references a column with Japanese characters.
-**Alias all Japanese column names to ASCII before translating.**
+**Rename all Japanese column names to ASCII before translating** using `withColumnRenamed()`.
 
-### 3. After `ai.translate()`, ONLY direct `.write.saveAsTable()` works via REST API
+### 3. No pip install needed for AI functions
 
-These all fail after `ai.translate()` when run via REST API:
-- `.select()` ❌
-- `.drop()` ❌
-- `.collect()` ❌
-- `.show()` / `display()` ❌ (in batch mode)
+PySpark AI functions work with just `import synapse.ml.spark.aifunc as aifunc`.
+No `%pip install openai` is required.
 
-Only `.write.mode('overwrite').format('delta').saveAsTable()` directly on the translated
-DataFrame works.
+### 4. Independent translate + pandas works via REST API
 
-### 4. ≤5 chained ai.translate calls work via REST API
+Unlike the chaining pattern, the independent translate approach with `.select().toPandas()`
+works both interactively in the Fabric UI AND as a REST API `RunNotebook` batch job.
+Translation of 10 columns takes ~4.5 minutes via API.
 
-Confirmed: 5 chained translates + direct write succeeds. We need 9 translates total.
+### 5. Japanese table names → "Unidentified" in Lakehouse SQL endpoint
 
-### 5. Columns that do NOT need translation
+Using `saveAsTable('mext.教育コンテンツ')` creates tables the SQL endpoint can't sync
+metadata for, especially with full-width characters like ＵＲＬ. **Use English table names**
+(`education_content_jp`, `education_content_en`). Japanese column names display as
+"Unidentified" in the SQL endpoint but the data is accessible via Spark.
 
-Six columns can be renamed only (no AI translation):
+### 6. Columns translated (10 of 15)
 
-- **Col 1** `教材_ID` → `material_id` — Alphanumeric code
-- **Col 3** `教材_言語` → `material_language` — Already in English
-- **Col 4** `教材_キーワード` → `material_keywords` — Empty/NULL values
-- **Col 8** `教材_分野_科目` → `material_field` — Empty/NULL values
-- **Col 11** `教材_ＵＲＬ` → `material_url` — URLs (English)
-- **Col 13** `教材_ライセンス` → `material_license` — Already in English
+Five columns are renamed only (no AI translation needed):
+- `教材_ID` → `material_id` — Alphanumeric code
+- `教材_言語` → `material_language` — Already in English
+- `教材_分野_科目` → `material_field` — Empty/NULL values
+- `教材_ＵＲＬ` → `material_url` — URLs (English)
+- `教材_ライセンス` → `material_license` — Already in English
 
-Nine columns need translation:
-- material_name, material_format, material_target_audience, material_subject,
-  material_target_grade, material_content_type, material_price_category,
-  material_status, material_publisher
+Ten columns are translated via AI:
+- material_name, material_keywords, material_format, material_target_audience,
+  material_subject, material_target_grade, material_content_type,
+  material_price_category, material_status, material_publisher
 
 ---
 
@@ -116,7 +104,7 @@ Nine columns need translation:
 | 1 | 教材_ID | material_id | Rename only (alphanumeric code) |
 | 2 | 教材_名称 | material_name | **Translate** |
 | 3 | 教材_言語 | material_language | Rename only (already English) |
-| 4 | 教材_キーワード | material_keywords | Rename only (empty/null) |
+| 4 | 教材_キーワード | material_keywords | **Translate** |
 | 5 | 教材_形式 | material_format | **Translate** |
 | 6 | 教材_対象者 | material_target_audience | **Translate** |
 | 7 | 教材_教科等 | material_subject | **Translate** |
@@ -138,10 +126,6 @@ Nine columns need translation:
 - **Solution**: Use Python `csv.reader` + `spark.createDataFrame()` instead
 - Original CSV is Shift-JIS (cp932), has trailing empty columns and embedded newlines
 
-### Japanese Table Names in Fabric
-- Japanese Delta table names require backtick quoting: `mext.\`教育コンテンツ\``
-- `option('overwriteSchema', 'true')` needed when overwriting with a different schema
-
 ### Notebook Deployment via REST API
 - Create: `POST /v1/workspaces/{WS_ID}/items` with `type: "Notebook"`
 - Update: `POST /v1/workspaces/{WS_ID}/notebooks/{NB_ID}/updateDefinition`
@@ -150,53 +134,27 @@ Nine columns need translation:
 
 ---
 
-## Current TranslateMextToEnglish.ipynb (local, needs testing)
-
-The notebook on disk follows the working `TranslateToJapanese.ipynb` pattern:
+## Architecture
 
 ```
-Cell 0: %pip install openai
-Cell 1: import aifunc
-Cell 2: SQL SELECT with all columns renamed to English + display
-Cell 3: Chain 9 ai.translate calls + display
-Cell 4: Write all columns (originals + _en translations) to staging table
-Cell 5: SQL SELECT only the clean columns (using _en instead of originals) + display
-Cell 6: Write final table + drop staging
+CSV (Shift-JIS) → OneLake Files → LoadMextEducationData.ipynb
+                                        ↓
+                               mext.education_content_jp
+                               (Japanese column headers, 887 rows)
+                                        ↓
+                               TranslateMextToEnglish.ipynb
+                               (10 independent ai.translate → pandas → Spark)
+                                        ↓
+                               mext.education_content_en
+                               (English column names + translated values)
 ```
 
-This has NOT been tested yet. It may fail via REST API but should work interactively.
+## Current State (2026-04-04)
 
----
-
-## Options to Complete the Translation
-
-### Option A: Run translate notebook interactively (recommended)
-The deploy script provisions everything and runs the Load notebook via API.
-The user then opens TranslateMextToEnglish in the Fabric UI and runs it interactively.
-This matches the proven pattern from the working `TranslateToJapanese.ipynb`.
-
-### Option B: Two-notebook API approach
-Split into 2 notebooks for API execution (5 translates each), writing to staging
-tables, plus a 3rd cleanup notebook that SQL joins staging → final.
-More complex, but fully automated.
-
-### Option C: Test current notebook via API anyway
-The current version with `%pip install openai` and `display()` calls hasn't been tested.
-It's possible the pip install was the missing piece (though unlikely to be the cause).
-
----
-
-## Current State (2026-04-03)
-
-### Workspace: MextSkillsF4Learning
-- **Capacity**: F8 (westus3f4learning)
-- **Lakehouse**: MextLearningLH
-- **Notebooks**: LoadMextEducationData ✅, TranslateMextToEnglish (not working via API)
-- **Tables**: `mext.教育コンテンツ` (887 rows, working)
-- **Test notebooks**: All cleaned up — only 2 notebooks remain
-- **Test tables**: All cleaned up — only `教育コンテンツ` remains
-
-### Local repo
-- Both notebook .ipynb files saved locally in `notebooks/`
-- Uncommitted changes: updated notebooks, findings.md, context files
-- 2 commits previously pushed to `main` on GitHub
+- **Deploy script**: Fully automated E2E — provisions capacity, workspace, lakehouse,
+  uploads CSV, deploys notebooks, runs Load AND Translate via REST API
+- **Load notebook**: ✅ Works via API (~30 seconds)
+- **Translate notebook**: ✅ Works via API (~4.5 minutes) and interactively
+- **Tables**: `mext.education_content_jp` (Japanese), `mext.education_content_en` (English)
+- **Capacity**: F4, West US 3
+- **Git**: All committed and pushed to `main` on GitHub
