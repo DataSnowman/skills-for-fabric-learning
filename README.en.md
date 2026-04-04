@@ -132,6 +132,30 @@ skills-for-fabric-learning/
 └── .gitignore
 ```
 
+## Here are some images of the Fabric screen shots
+
+Fabric Capacity
+
+![capacity](images/capacity.png)
+
+Fabric Workspace
+
+![workspace](images/workspace.png)
+
+Fabric Lakehouse Files and Tables
+
+![lakehouse](images/lakehouse.png)
+
+Fabric Notebooks
+
+![nbtranslate](images/nbtranslate.png)
+
+![nbload](images/nbload.png)
+
+Fabric SQL Analytics Endpoint
+
+![sqlep](images/sqlep.png)
+
 ## Verifying the Results
 
 After deployment, query both Delta tables in Fabric SQL:

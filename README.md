@@ -152,6 +152,30 @@ skills-for-fabric-learning/
 └── .gitignore
 ```
 
+## Fabric のスクリーンショット
+
+Fabric キャパシティ
+
+![capacity](images/capacity.png)
+
+Fabric ワークスペース
+
+![workspace](images/workspace.png)
+
+Fabric レイクハウスのファイルとテーブル
+
+![lakehouse](images/lakehouse.png)
+
+Fabric ノートブック
+
+![nbtranslate](images/nbtranslate.png)
+
+![nbload](images/nbload.png)
+
+Fabric SQL 分析エンドポイント
+
+![sqlep](images/sqlep.png)
+
 ## 結果の確認
 
 デプロイ後、Fabric SQL で両方の Delta テーブルをクエリできます：
