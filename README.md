@@ -93,17 +93,34 @@ git clone https://github.com/DataSnowman/skills-for-fabric-learning.git
 cd skills-for-fabric-learning
 ```
 
-### ステップ 3 — Azure にログイン
+### ステップ 3 — （オプション）VS Code で開く
+
+マークダウンファイルを VS Code で編集したい場合：
+
+```bash
+code .
+```
+
+### ステップ 4 — Azure にログイン
 
 ```bash
 az login
 ```
 
-### ステップ 4 — 設定の編集
+### ステップ 5 — 設定の編集
 
-`config/variables.md` を編集し、キャパシティ、ワークスペース、レイクハウスの名前を設定します。CSV は自動的にダウンロードされます。
+`config/variables.md` を開き、環境に合わせた値を設定します：
 
-### ステップ 5 — デプロイの実行
+| 変数 | 設定内容 |
+|---|---|
+| `RESOURCE_GROUP` | Azure リソースグループ名 |
+| `CAPACITY_NAME` | グローバルで一意、小文字英数字の Fabric キャパシティ名 |
+| `WORKSPACE_NAME` | Fabric ワークスペースの表示名 |
+| `LAKEHOUSE_NAME` | 作成するレイクハウス名 |
+
+### ステップ 6 — 実行方法の選択
+
+以下のいずれかの方法を選択してください：
 
 #### 方法 A: シェルスクリプト（コマンド1つ）
 
@@ -112,9 +129,23 @@ chmod +x deploy-mext-e2e.sh
 ./deploy-mext-e2e.sh
 ```
 
-#### 方法 B: AI エージェント
+#### 方法 B: AI コーディングエージェント（GitHub Copilot CLI または Claude Code）
 
-GitHub Copilot CLI または Claude Code を開き、コンテキストファイルを指定します：
+AI エージェントにコンテキストファイルを読み込ませ、ターミナルで対話的に各ステップを実行します。
+
+**GitHub Copilot CLI:**
+```bash
+copilot
+```
+
+または
+
+**Claude Code:**
+```bash
+claude
+```
+
+エージェントが起動したら、コンテキストファイルと設定ファイルを参照するプロンプトを入力します：
 
 ```
 context/loadMextData.md の手順と config/variables.md の設定を使用して、

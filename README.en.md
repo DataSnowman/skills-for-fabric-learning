@@ -73,17 +73,34 @@ git clone https://github.com/DataSnowman/skills-for-fabric-learning.git
 cd skills-for-fabric-learning
 ```
 
-### Step 3 — Log in to Azure
+### Step 3 — (Optional) Open in VS Code
+
+If you prefer to edit the markdown files in VS Code:
+
+```bash
+code .
+```
+
+### Step 4 — Log in to Azure
 
 ```bash
 az login
 ```
 
-### Step 4 — Edit Configuration
+### Step 5 — Edit Configuration
 
-Edit `config/variables.md` and set your preferred names for the capacity, workspace, and lakehouse. The CSV will be downloaded automatically.
+Open `config/variables.md` and set the values that match your environment:
 
-### Step 5 — Run the Deployment
+| Variable | What to set |
+|---|---|
+| `RESOURCE_GROUP` | Your Azure Resource Group name |
+| `CAPACITY_NAME` | A globally unique, lowercase alphanumeric Fabric capacity name |
+| `WORKSPACE_NAME` | Your Fabric workspace display name |
+| `LAKEHOUSE_NAME` | The Lakehouse to create |
+
+### Step 6 — Choose How to Run It
+
+Pick one of the options below:
 
 #### Option A: Shell Script (one command)
 
@@ -92,9 +109,23 @@ chmod +x deploy-mext-e2e.sh
 ./deploy-mext-e2e.sh
 ```
 
-#### Option B: AI Agent
+#### Option B: AI Coding Agent (GitHub Copilot CLI or Claude Code)
 
-Open GitHub Copilot CLI or Claude Code and point it at the context files:
+Let an AI agent read the context files and execute each step interactively in the terminal.
+
+**GitHub Copilot CLI:**
+```bash
+copilot
+```
+
+OR
+
+**Claude Code:**
+```bash
+claude
+```
+
+Once the agent is running, give it a prompt that references the context and config files:
 
 ```
 Load the MEXT education CSV data into a Fabric lakehouse using the instructions
