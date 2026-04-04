@@ -73,11 +73,17 @@ git clone https://github.com/DataSnowman/skills-for-fabric-learning.git
 cd skills-for-fabric-learning
 ```
 
-### Step 3 — Edit Configuration
+### Step 3 — Log in to Azure
+
+```bash
+az login
+```
+
+### Step 4 — Edit Configuration
 
 Edit `config/variables.md` and set your preferred names for the capacity, workspace, and lakehouse. The CSV will be downloaded automatically.
 
-### Step 4 — Run the Deployment
+### Step 5 — Run the Deployment
 
 #### Option A: Shell Script (one command)
 

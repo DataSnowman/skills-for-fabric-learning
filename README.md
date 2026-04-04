@@ -93,11 +93,17 @@ git clone https://github.com/DataSnowman/skills-for-fabric-learning.git
 cd skills-for-fabric-learning
 ```
 
-### ステップ 3 — 設定の編集
+### ステップ 3 — Azure にログイン
+
+```bash
+az login
+```
+
+### ステップ 4 — 設定の編集
 
 `config/variables.md` を編集し、キャパシティ、ワークスペース、レイクハウスの名前を設定します。CSV は自動的にダウンロードされます。
 
-### ステップ 4 — デプロイの実行
+### ステップ 5 — デプロイの実行
 
 #### 方法 A: シェルスクリプト（コマンド1つ）
 
