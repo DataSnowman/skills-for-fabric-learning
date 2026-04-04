@@ -386,9 +386,18 @@ LOAD_JOB_ID=$(submit_notebook_job "$WS_ID" "$LOAD_NB_ID")
 [[ -n "$LOAD_JOB_ID" ]] || fail "Could not submit notebook job"
 poll_job "$WS_ID" "$LOAD_NB_ID" "$LOAD_JOB_ID" "$NOTEBOOK_NAME" 60 15
 
-# ─── STEP 9: VERIFY JAPANESE TABLE ───────────────────────────────────────────
+# ─── STEP 9: RUN TRANSLATION NOTEBOOK ───────────────────────────────────────
 
-log "Step 9 — Verify Japanese Delta table"
+log "Step 9 — Run $TRANSLATE_NOTEBOOK_NAME notebook (translate to English)"
+info "This step uses Fabric AI functions and takes several minutes..."
+
+TRANSLATE_JOB_ID=$(submit_notebook_job "$WS_ID" "$TRANSLATE_NB_ID")
+[[ -n "$TRANSLATE_JOB_ID" ]] || fail "Could not submit translation notebook job"
+poll_job "$WS_ID" "$TRANSLATE_NB_ID" "$TRANSLATE_JOB_ID" "$TRANSLATE_NOTEBOOK_NAME" 80 15
+
+# ─── STEP 10: VERIFY ────────────────────────────────────────────────────────
+
+log "Step 10 — Verify Delta tables"
 
 STORAGE_TOKEN=$(az account get-access-token \
   --resource "https://storage.azure.com" \
@@ -399,9 +408,15 @@ TABLE_CHECK=$(curl -s -H "Authorization: Bearer $STORAGE_TOKEN" \
   "https://onelake.blob.fabric.microsoft.com/$WS_ID/$LH_ID/Tables?restype=container&comp=list&prefix=$DELTA_SCHEMA&maxresults=10")
 
 if echo "$TABLE_CHECK" | grep -q "$DELTA_TABLE_JP"; then
-  ok "Delta table $DELTA_SCHEMA.$DELTA_TABLE_JP exists"
+  ok "Delta table $DELTA_SCHEMA.$DELTA_TABLE_JP (Japanese) exists"
 else
-  info "Table not yet visible via blob API (may still be propagating)"
+  info "Japanese table not yet visible via blob API (may still be propagating)"
+fi
+
+if echo "$TABLE_CHECK" | grep -q "$DELTA_TABLE_EN"; then
+  ok "Delta table $DELTA_SCHEMA.$DELTA_TABLE_EN (English) exists"
+else
+  info "English table not yet visible via blob API (may still be propagating)"
 fi
 
 # ─── SUMMARY ─────────────────────────────────────────────────────────────────
@@ -415,26 +430,18 @@ echo "  Notebooks:"
 echo "    Load:      $NOTEBOOK_NAME ($LOAD_NB_ID)"
 echo "    Translate: $TRANSLATE_NOTEBOOK_NAME ($TRANSLATE_NB_ID)"
 echo "  Tables:"
-echo "    Japanese:  $DELTA_SCHEMA.$DELTA_TABLE_JP (loaded by script)"
-echo "    English:   $DELTA_SCHEMA.$DELTA_TABLE_EN (created by translate notebook)"
+echo "    Japanese:  $DELTA_SCHEMA.$DELTA_TABLE_JP"
+echo "    English:   $DELTA_SCHEMA.$DELTA_TABLE_EN"
 echo ""
 echo "  Query Japanese table:"
 echo "    SELECT \`教材_教科等\` AS subject, COUNT(*) AS count"
 echo "    FROM [$LAKEHOUSE_NAME].[$DELTA_SCHEMA].[$DELTA_TABLE_JP]"
 echo "    GROUP BY \`教材_教科等\` ORDER BY count DESC"
 echo ""
-echo "  ┌──────────────────────────────────────────────────────────────────┐"
-echo "  │  NEXT STEP: Run the translation notebook in the Fabric UI      │"
-echo "  │                                                                  │"
-echo "  │  1. Open the workspace in Fabric:                                │"
-echo "  │     https://app.fabric.microsoft.com/groups/$WS_ID              │"
-echo "  │  2. Open the '$TRANSLATE_NOTEBOOK_NAME' notebook                │"
-echo "  │  3. Click 'Run all' to translate Japanese → English              │"
-echo "  │  4. This creates the $DELTA_SCHEMA.$DELTA_TABLE_EN table        │"
-echo "  │                                                                  │"
-echo "  │  The translation uses Fabric AI functions (ai.translate) which   │"
-echo "  │  require interactive execution in the Fabric UI.                 │"
-echo "  └──────────────────────────────────────────────────────────────────┘"
+echo "  Query English table:"
+echo "    SELECT material_subject AS subject, COUNT(*) AS count"
+echo "    FROM [$LAKEHOUSE_NAME].[$DELTA_SCHEMA].[$DELTA_TABLE_EN]"
+echo "    GROUP BY material_subject ORDER BY count DESC"
 echo ""
 
 # Clean up temp files
